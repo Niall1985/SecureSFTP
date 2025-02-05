@@ -89,6 +89,3 @@ This project is licensed under the **MIT License**.
 We welcome contributions! Feel free to submit pull requests or open issues.  
 
 ---
-```
-
-This **README** gives a **clear, structured, and professional** documentation for your **Secure SFTP with TLS encryption** project. 🚀
