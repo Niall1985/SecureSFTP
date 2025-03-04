@@ -3,84 +3,111 @@ package main
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"os"
 )
 
-var encryptionkey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n1x")
+var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n1x") // 32-byte key for AES-256
 
 func main() {
-	cert, err := tls.LoadX509KeyPair("../certs/server.crt", "../certs/server.key") //load the tls certificate
+	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
-		fmt.Println("Error loading tls certificates: ", err)
+		fmt.Println("Failed to start server:", err)
 		return
 	}
+	defer listener.Close()
 
-	config := &tls.Config{Certificates: []tls.Certificate{cert}} //configure tls
-
-	listener, err := tls.Listen("tcp", ":8080", config)
-
-	if err != nil {
-		fmt.Println("Failed to start server: ", err)
-		return
-	}
-	defer listener.Close() //start the servr
-	fmt.Println("Secure SFTP server running on port 8080...")
+	fmt.Println("Server is listening on port 8080...")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Failed to connect: ", err)
+			fmt.Println("Failed to accept connection:", err)
 			continue
 		}
-		go handleClient(conn)
+
+		go handleConnection(conn)
 	}
 }
 
-func handleClient(conn net.Conn) { //handle the content coming from the client
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	fmt.Println("Connection estabilished: ", conn.RemoteAddr())
 
-	file, err := os.Create("received_content.txt")
+	encryptedFile := "received_encrypted.txt"
+	decryptedFile := "decrypted_output.txt"
+
+	err := receiveFile(encryptedFile, conn)
 	if err != nil {
-		fmt.Println("Error creating file: ", err)
+		fmt.Println("Failed to receive file:", err)
 		return
 	}
 
+	fmt.Println("Encrypted file received successfully!")
+
+	err = decryptFile(encryptedFile, decryptedFile)
+	if err != nil {
+		fmt.Println("Decryption failed:", err)
+		return
+	}
+
+	fmt.Println("File decrypted successfully! Saved as:", decryptedFile)
+}
+
+func receiveFile(filePath string, conn net.Conn) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
 	defer file.Close()
 
-	buffer := make([]byte, 1024) //created a buffer to store the encrypted data
+	buffer := make([]byte, 1024)
 	for {
 		n, err := conn.Read(buffer)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			fmt.Println("Error reading from connection:", err)
-			return
+			return err
 		}
-		file.Write(buffer[:n])
+		_, err = file.Write(buffer[:n])
+		if err != nil {
+			return err
+		}
 	}
-	fmt.Println("Encrypted file received.")
-
-	decryptFile("received_encrypted.txt", "decrypted_output.txt")
-	fmt.Println("Decryption complete. File saved as decrypted_output.txt")
+	return nil
 }
 
-func decryptFile(inputFile, outputFile string) {
-	inFile, _ := os.Open(inputFile)
+func decryptFile(inputFile, outputFile string) error {
+	inFile, err := os.Open(inputFile)
+	if err != nil {
+		return err
+	}
 	defer inFile.Close()
-	outFile, _ := os.Create(outputFile)
+
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
 	defer outFile.Close()
 
+	// Read IV from the beginning of the file
 	iv := make([]byte, aes.BlockSize)
-	inFile.Read(iv)
+	_, err = inFile.Read(iv)
+	if err != nil {
+		return err
+	}
 
-	block, _ := aes.NewCipher(encryptionkey) // Create AES cipher
+	block, err := aes.NewCipher(encryptionKey)
+	if err != nil {
+		return err
+	}
+
 	stream := cipher.NewCFBDecrypter(block, iv)
+	reader := &cipher.StreamReader{S: stream, R: inFile}
 
-	io.Copy(outFile, &cipher.StreamReader{S: stream, R: inFile}) // Decrypt and write to file
+	// Copy decrypted data to output file
+	_, err = io.Copy(outFile, reader)
+	return err
 }
