@@ -4,99 +4,126 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"os"
 )
 
-var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n1x") // 32-byte key for AES-256
+var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n14") // 32-byte AES-256 key
 
 func main() {
-	config := &tls.Config{InsecureSkipVerify: true} // For testing
+	serverAddress := "172.20.42.26:8080"
+	filePath := "C:\\Users\\Niall Dcunha\\SecureSFTP\\hi.txt"
+	encryptedFilePath := "encrypted_test.txt"
 
-	// conn, err := tls.Dial("tcp", "localhost:8080", config)
-	conn, err := tls.Dial("tcp", "172.20.42.26:8080", config)
-	if err != nil {
-		fmt.Println("Failed to connect:", err)
+	// Ensure the input file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("❌ Error: File not found:", filePath)
 		return
 	}
-	defer conn.Close()
 
-	inputFile := "hi.txt"
-	encryptedFile := "encrypted_output.txt"
-
-	err = encryptFile(inputFile, encryptedFile)
+	err := encryptFile(filePath, encryptedFilePath)
 	if err != nil {
 		fmt.Println("Encryption failed:", err)
 		return
 	}
+	fmt.Println("✅ Encryption successful! File saved as", encryptedFilePath)
 
-	err = sendFile(encryptedFile, conn)
+	// Connect to server
+	conn, err := net.Dial("tcp", serverAddress)
 	if err != nil {
-		fmt.Println("Failed to send file:", err)
+		fmt.Println("❌ Connection failed:", err)
 		return
 	}
+	defer conn.Close()
 
-	fmt.Println("Encrypted file sent successfully!") // Final confirmation message
+	err = sendFile(encryptedFilePath, conn)
+	if err != nil {
+		fmt.Println("❌ File transfer failed:", err)
+	} else {
+		fmt.Println("✅ File sent successfully!")
+	}
 }
 
+// **Encrypts a file and saves the encrypted version**
 func encryptFile(inputFile, outputFile string) error {
+	fmt.Println("🔒 Encrypting file...")
+
 	inFile, err := os.Open(inputFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("error opening input file: %v", err)
 	}
 	defer inFile.Close()
 
 	outFile, err := os.Create(outputFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating output file: %v", err)
 	}
 	defer outFile.Close()
 
-	iv := make([]byte, aes.BlockSize)
-	if _, err := rand.Read(iv); err != nil {
-		return err
-	}
-	_, err = outFile.Write(iv) // Write IV at the beginning
-	if err != nil {
-		return err
-	}
-
+	// Create AES cipher
 	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating cipher block: %v", err)
 	}
-	stream := cipher.NewCFBEncrypter(block, iv)
 
+	// Generate IV (16 bytes for AES)
+	iv := make([]byte, aes.BlockSize)
+	_, err = io.ReadFull(rand.Reader, iv) // FIX: Use `rand.Reader` instead of os.Open("/dev/urandom")
+	if err != nil {
+		return fmt.Errorf("error generating IV: %v", err)
+	}
+	_, err = outFile.Write(iv) // Save IV at the beginning of the file
+	if err != nil {
+		return fmt.Errorf("error writing IV: %v", err)
+	}
+
+	// Create encryption stream
+	stream := cipher.NewCFBEncrypter(block, iv)
 	writer := &cipher.StreamWriter{S: stream, W: outFile}
+
+	// Encrypt and write to file
 	_, err = io.Copy(writer, inFile)
-	return err
+	if err != nil {
+		return fmt.Errorf("error encrypting file: %v", err)
+	}
+
+	fmt.Println("✅ File encrypted successfully!")
+	return nil
 }
 
+// **Sends the encrypted file to the server**
 func sendFile(filePath string, conn net.Conn) error {
+	fmt.Println("📤 Sending file to server...")
+
 	file, err := os.Open(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("error opening file: %v", err)
 	}
 	defer file.Close()
 
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 4096) // Increased buffer size
+	totalBytes := 0
+
 	for {
 		n, err := file.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				break
+		if n > 0 {
+			_, writeErr := conn.Write(buffer[:n])
+			if writeErr != nil {
+				return fmt.Errorf("error writing to connection: %v", writeErr)
 			}
-			return err
+			totalBytes += n
+			fmt.Println("📤 Sent", totalBytes, "bytes")
 		}
-		_, err = conn.Write(buffer[:n])
-		if err != nil {
-			return err
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error reading file: %v", err)
 		}
 	}
 
-	fmt.Println("File sent successfully!") // Message displayed after successful transfer
+	fmt.Println("✅ File transfer complete! Total bytes:", totalBytes)
 	return nil
 }
