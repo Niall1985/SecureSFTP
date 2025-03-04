@@ -13,8 +13,8 @@ import (
 var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n14") // 32-byte AES-256 key
 
 func main() {
-	serverAddress := "192.168.36.199:8080"
-	filePath := "C:\\Users\\Niall Dcunha\\SecureSFTP\\hi.txt"
+	serverAddress := "192.168.36.162:8080"
+	filePath := "C:\\Users\\Niall Dcunha\\SecureSFTP\\hello.txt"
 	encryptedFilePath := "encrypted_test.txt"
 
 	// Ensure the input file exists
