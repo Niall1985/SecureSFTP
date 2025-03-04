@@ -14,45 +14,41 @@ var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n1x") // 32-byte key fo
 func main() {
 	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
-		fmt.Println("Failed to start server:", err)
+		fmt.Println("Error starting server:", err)
 		return
 	}
 	defer listener.Close()
 
-	fmt.Println("Server is listening on port 8080...")
+	fmt.Println("Server listening on port 8080...")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Failed to accept connection:", err)
+			fmt.Println("Connection error:", err)
 			continue
 		}
+		fmt.Println("Client connected")
 
-		go handleConnection(conn)
+		receivedFile := "encrypted_received.txt"
+		decryptedFile := "decrypted_output.txt"
+
+		err = receiveFile(receivedFile, conn)
+		if err != nil {
+			fmt.Println("Failed to receive file:", err)
+			conn.Close()
+			continue
+		}
+		fmt.Println("Encrypted file received successfully")
+
+		err = decryptFile(receivedFile, decryptedFile)
+		if err != nil {
+			fmt.Println("Decryption failed:", err)
+		} else {
+			fmt.Println("Decryption successful! File saved as", decryptedFile)
+		}
+
+		conn.Close()
 	}
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	encryptedFile := "received_encrypted.txt"
-	decryptedFile := "decrypted_output.txt"
-
-	err := receiveFile(encryptedFile, conn)
-	if err != nil {
-		fmt.Println("Failed to receive file:", err)
-		return
-	}
-
-	fmt.Println("Encrypted file received successfully!")
-
-	err = decryptFile(encryptedFile, decryptedFile)
-	if err != nil {
-		fmt.Println("Decryption failed:", err)
-		return
-	}
-
-	fmt.Println("File decrypted successfully! Saved as:", decryptedFile)
 }
 
 func receiveFile(filePath string, conn net.Conn) error {
@@ -92,9 +88,8 @@ func decryptFile(inputFile, outputFile string) error {
 	}
 	defer outFile.Close()
 
-	// Read IV from the beginning of the file
 	iv := make([]byte, aes.BlockSize)
-	_, err = inFile.Read(iv)
+	_, err = inFile.Read(iv) // Read IV from the beginning of the file
 	if err != nil {
 		return err
 	}
@@ -103,11 +98,9 @@ func decryptFile(inputFile, outputFile string) error {
 	if err != nil {
 		return err
 	}
-
 	stream := cipher.NewCFBDecrypter(block, iv)
-	reader := &cipher.StreamReader{S: stream, R: inFile}
 
-	// Copy decrypted data to output file
+	reader := &cipher.StreamReader{S: stream, R: inFile}
 	_, err = io.Copy(outFile, reader)
 	return err
 }

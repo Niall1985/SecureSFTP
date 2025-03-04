@@ -16,14 +16,15 @@ var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n1x") // 32-byte key fo
 func main() {
 	config := &tls.Config{InsecureSkipVerify: true} // For testing
 
-	conn, err := tls.Dial("tcp", "localhost:8080", config)
+	// conn, err := tls.Dial("tcp", "localhost:8080", config)
+	conn, err := tls.Dial("tcp", "172.20.42.26:8080", config)
 	if err != nil {
 		fmt.Println("Failed to connect:", err)
 		return
 	}
 	defer conn.Close()
 
-	inputFile := "sample.txt"
+	inputFile := "hi.txt"
 	encryptedFile := "encrypted_output.txt"
 
 	err = encryptFile(inputFile, encryptedFile)
@@ -38,7 +39,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Encrypted file sent successfully!")
+	fmt.Println("Encrypted file sent successfully!") // Final confirmation message
 }
 
 func encryptFile(inputFile, outputFile string) error {
@@ -95,5 +96,7 @@ func sendFile(filePath string, conn net.Conn) error {
 			return err
 		}
 	}
+
+	fmt.Println("File sent successfully!") // Message displayed after successful transfer
 	return nil
 }
