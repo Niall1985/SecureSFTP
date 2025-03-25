@@ -4,16 +4,16 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"io"
-	"net"
 	"os"
 )
 
 var encryptionKey = []byte("1a2b3c4d5e6f7g8h9i10j11k12m13n14") // 32-byte AES-256 key
 
 func main() {
-	serverAddress := "192.168.36.162:8080"
+	serverAddress := "192.168.36.199:8080"
 	filePath := "C:\\Users\\Niall Dcunha\\SecureSFTP\\hello.txt"
 	encryptedFilePath := "encrypted_test.txt"
 
@@ -30,10 +30,15 @@ func main() {
 	}
 	fmt.Println("✅ Encryption successful! File saved as", encryptedFilePath)
 
-	// Connect to server
-	conn, err := net.Dial("tcp", serverAddress)
+	// Load system CA certificates
+	config := &tls.Config{
+		InsecureSkipVerify: true, // Use only if self-signed; for production, verify CA properly
+	}
+
+	// Connect to the server over TLS
+	conn, err := tls.Dial("tcp", serverAddress, config)
 	if err != nil {
-		fmt.Println("❌ Connection failed:", err)
+		fmt.Println("❌ TLS Connection failed:", err)
 		return
 	}
 	defer conn.Close()
@@ -46,7 +51,7 @@ func main() {
 	}
 }
 
-// **Encrypts a file and saves the encrypted version**
+// Encrypts a file and saves the encrypted version
 func encryptFile(inputFile, outputFile string) error {
 	fmt.Println("🔒 Encrypting file...")
 
@@ -70,11 +75,11 @@ func encryptFile(inputFile, outputFile string) error {
 
 	// Generate IV (16 bytes for AES)
 	iv := make([]byte, aes.BlockSize)
-	_, err = io.ReadFull(rand.Reader, iv) // FIX: Use `rand.Reader` instead of os.Open("/dev/urandom")
+	_, err = io.ReadFull(rand.Reader, iv)
 	if err != nil {
 		return fmt.Errorf("error generating IV: %v", err)
 	}
-	_, err = outFile.Write(iv) // Save IV at the beginning of the file
+	_, err = outFile.Write(iv)
 	if err != nil {
 		return fmt.Errorf("error writing IV: %v", err)
 	}
@@ -93,8 +98,8 @@ func encryptFile(inputFile, outputFile string) error {
 	return nil
 }
 
-// **Sends the encrypted file to the server**
-func sendFile(filePath string, conn net.Conn) error {
+// Sends the encrypted file to the server
+func sendFile(filePath string, conn *tls.Conn) error {
 	fmt.Println("📤 Sending file to server...")
 
 	file, err := os.Open(filePath)
