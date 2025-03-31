@@ -3,11 +3,4 @@ certs/*.crt
 certs/*.key
 .env
 
-uploads/*
-!uploads/.gitignore
 
-encrypted_uploads/*
-!encrypted_uploads/.gitignore
-
-decrypted_uploads/*
-!decrypted_uploads/.gitignore
