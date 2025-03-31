@@ -1,0 +1,3 @@
+1. write the go script to take the file and email inputs from the frontend and store it in a directory
+2. encrypt the files present in the dirctory and store it in another directory 
+3. at the receiver end, when the user enters the email id and there is a match, the files are decryted and sent
