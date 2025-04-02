@@ -11,7 +11,7 @@ COPY . .
 
 # if you have a requirements.txt file, uncomment the next two lines.
 #COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
 
 RUN go build -tags netgo -ldflags '-s -w' -o myapp ./main.go
 
