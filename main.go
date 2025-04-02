@@ -137,6 +137,26 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Serve decrypted files for download
+// func downloadHandler(w http.ResponseWriter, r *http.Request) {
+// 	email := r.PathValue("email")
+// 	fileName := r.PathValue("file")
+
+// 	filePath := filepath.Join("decrypted_uploads", email, fileName)
+
+// 	// Check if file exists
+// 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+// 		http.Error(w, "File not found", http.StatusNotFound)
+// 		return
+// 	}
+
+// 	// Set headers to prompt download
+// 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+// 	w.Header().Set("Content-Type", "application/octet-stream")
+// 	w.Header().Set("Content-Transfer-Encoding", "binary")
+
+// 	http.ServeFile(w, r, filePath)
+// }
+
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	email := r.PathValue("email")
 	fileName := r.PathValue("file")
@@ -154,7 +174,46 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 
+	// Serve the file
 	http.ServeFile(w, r, filePath)
+
+	// After successful file transfer, delete the file
+	err := os.Remove(filePath)
+	if err != nil {
+		fmt.Println("❌ Error deleting file:", err)
+	} else {
+		fmt.Println("✅ File deleted:", filePath)
+	}
+
+	// Check if the directory is empty, if yes, delete it
+	emailDir := filepath.Join("decrypted_uploads", email)
+	files, err := os.ReadDir(emailDir)
+	if err == nil && len(files) == 0 {
+		err := os.Remove(emailDir)
+		if err == nil {
+			fmt.Println("✅ Deleted empty directory:", emailDir)
+		} else {
+			fmt.Println("❌ Error deleting directory:", err)
+		}
+	}
+
+	// Cleanup all directories related to the email if no more decrypted files exist
+	cleanupUserFiles(email)
+}
+
+func cleanupUserFiles(email string) {
+	directories := []string{
+		filepath.Join("uploads", email),
+		filepath.Join("decrypted_uploads", email),
+	}
+
+	for _, dir := range directories {
+		if err := os.RemoveAll(dir); err == nil {
+			fmt.Println("✅ Deleted directory:", dir)
+		} else {
+			fmt.Println("❌ Error deleting directory:", err)
+		}
+	}
 }
 
 func main() {
