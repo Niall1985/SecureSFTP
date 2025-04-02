@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine
+FROM golang:1.22.5-alpine
 
 RUN apk update && apk add --no-cache python3 py3-pip
 
