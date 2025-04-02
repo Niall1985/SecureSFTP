@@ -127,7 +127,7 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	for _, file := range files {
 		if !file.IsDir() {
 			fileNames = append(fileNames, file.Name())
-			urls = append(urls, fmt.Sprintf("http://localhost:8080/download/%s/%s", req.Email, file.Name()))
+			urls = append(urls, fmt.Sprintf("https://securesftp.onrender.com/download/%s/%s", req.Email, file.Name()))
 		}
 	}
 
