@@ -33,12 +33,14 @@
 // 	decryptionScript = "decryption.py"
 // )
 
+// // Handle uploading files and triggering encryption
 // func uploadHandler(w http.ResponseWriter, r *http.Request) {
 // 	err := r.ParseMultipartForm(100 << 20)
 // 	if err != nil {
 // 		http.Error(w, "Error parsing form", http.StatusBadRequest)
 // 		return
 // 	}
+
 // 	email := r.FormValue("email")
 // 	if email == "" {
 // 		http.Error(w, "Email is required", http.StatusBadRequest)
@@ -84,9 +86,11 @@
 // 	w.Header().Set("Content-Type", "application/json")
 // 	json.NewEncoder(w).Encode(metadata)
 
-// 	go runPythonScript(encryptionScript, uploadDir) // Encrypt uploaded files
+// 	// Encrypt uploaded files
+// 	go runPythonScript(encryptionScript, uploadDir)
 // }
 
+// // Run encryption/decryption Python scripts
 // func runPythonScript(script string, dir string) {
 // 	cmd := exec.Command("python", script, dir)
 // 	cmd.Stdout = os.Stdout
@@ -99,6 +103,7 @@
 // 	}
 // }
 
+// // Handle receiving files (trigger decryption + return URLs)
 // func receiveHandler(w http.ResponseWriter, r *http.Request) {
 // 	var req ReceiveRequest
 // 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
@@ -124,10 +129,12 @@
 // 	}
 
 // 	var fileNames, urls []string
+// 	fmt.Println("📁 Decrypted files found:")
 // 	for _, file := range files {
 // 		if !file.IsDir() {
 // 			fileNames = append(fileNames, file.Name())
 // 			urls = append(urls, fmt.Sprintf("https://securesftp.onrender.com/download/%s/%s", req.Email, file.Name()))
+// 			fmt.Println("  -", file.Name())
 // 		}
 // 	}
 
@@ -143,20 +150,18 @@
 
 // 	filePath := filepath.Join("decrypted_uploads", email, fileName)
 
-// 	// Check if file exists
 // 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 // 		http.Error(w, "File not found", http.StatusNotFound)
 // 		return
 // 	}
 
-// 	// Set headers to prompt download
 // 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
 // 	w.Header().Set("Content-Type", "application/octet-stream")
 // 	w.Header().Set("Content-Transfer-Encoding", "binary")
-
 // 	http.ServeFile(w, r, filePath)
 // }
 
+// // Main function
 // func main() {
 // 	mux := http.NewServeMux()
 // 	mux.HandleFunc("/upload", uploadHandler)
@@ -253,17 +258,17 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		uploadedFiles = append(uploadedFiles, fileHeader.Filename)
 	}
 
+	// Encrypt uploaded files
+	go runPythonScript(encryptionScript, uploadDir)
+
 	metadata := UploadResponse{Email: email, Files: uploadedFiles}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(metadata)
-
-	// Encrypt uploaded files
-	go runPythonScript(encryptionScript, uploadDir)
 }
 
 // Run encryption/decryption Python scripts
-func runPythonScript(script string, dir string) {
-	cmd := exec.Command("python", script, dir)
+func runPythonScript(script string, arg string) {
+	cmd := exec.Command("python", script, arg)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
@@ -274,7 +279,7 @@ func runPythonScript(script string, dir string) {
 	}
 }
 
-// Handle receiving files (trigger decryption + return URLs)
+// Return encrypted files & URLs to frontend (no decryption here!)
 func receiveHandler(w http.ResponseWriter, r *http.Request) {
 	var req ReceiveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
@@ -282,53 +287,55 @@ func receiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("🔄 Decrypting files for:", req.Email)
-	cmd := exec.Command("python", decryptionScript, req.Email)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		http.Error(w, "Error decrypting files", http.StatusInternalServerError)
-		return
-	}
-
-	decryptedDir := filepath.Join("decrypted_uploads", req.Email)
-	files, err := os.ReadDir(decryptedDir)
+	encryptedDir := filepath.Join("encrypted_uploads", req.Email)
+	files, err := os.ReadDir(encryptedDir)
 	if err != nil {
-		http.Error(w, "Error reading decrypted files", http.StatusInternalServerError)
+		http.Error(w, "Error reading encrypted files", http.StatusInternalServerError)
 		return
 	}
 
 	var fileNames, urls []string
-	fmt.Println("📁 Decrypted files found:")
 	for _, file := range files {
 		if !file.IsDir() {
 			fileNames = append(fileNames, file.Name())
 			urls = append(urls, fmt.Sprintf("https://securesftp.onrender.com/download/%s/%s", req.Email, file.Name()))
-			fmt.Println("  -", file.Name())
 		}
 	}
 
-	response := ReceiveResponse{Email: req.Email, Files: fileNames, URLs: urls}
+	response := ReceiveResponse{
+		Email: req.Email,
+		Files: fileNames,
+		URLs:  urls,
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
-// Serve decrypted files for download
+// Decrypt files only when user downloads
 func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	email := r.PathValue("email")
 	fileName := r.PathValue("file")
 
-	filePath := filepath.Join("decrypted_uploads", email, fileName)
+	// Trigger decryption only for the requested file
+	fmt.Println("🔐 Triggering decryption for:", fileName)
+	cmd := exec.Command("python", decryptionScript, email)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		http.Error(w, "Error decrypting file", http.StatusInternalServerError)
+		return
+	}
 
+	// Serve decrypted file
+	filePath := filepath.Join("decrypted_uploads", email, fileName)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Transfer-Encoding", "binary")
+	w.Header().Set("Content-Type", "application/pdf")
 	http.ServeFile(w, r, filePath)
 }
 
