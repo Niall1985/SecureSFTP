@@ -41,6 +41,11 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("✅ Parsed multipart form")
+	log.Println("Form value email:", r.FormValue("email"))
+	log.Println("Available form fields:", r.MultipartForm.Value)
+	log.Println("Available file fields:", r.MultipartForm.File)
+
 	email := r.FormValue("email")
 	if email == "" {
 		http.Error(w, "Email is required", http.StatusBadRequest)
